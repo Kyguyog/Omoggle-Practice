@@ -121,10 +121,6 @@ async function init() {
     });
     document.getElementById("status").textContent = "STARTING CAMERA…";
     await startCamera(null);
-    video.addEventListener("loadeddata", () => {
-      document.getElementById("status-wrap").style.display = "none";
-      requestAnimationFrame(loop);
-    });
   } catch(err) {
     document.getElementById("status").textContent = "ERROR: " + err.message;
   }
@@ -268,6 +264,7 @@ document.getElementById("mesh-toggle").addEventListener("click", function() {
 
 // ── camera selector ──────────────────────────────────────────────────────────
 let currentDeviceId = null;
+let loopStarted = false;
 
 async function startCamera(deviceId) {
   if (video.srcObject) {
@@ -278,7 +275,13 @@ async function startCamera(deviceId) {
   };
   const stream = await navigator.mediaDevices.getUserMedia(constraints);
   video.srcObject = stream;
-  currentDeviceId = deviceId || stream.getVideoTracks()[0]?.getSettings()?.deviceId;
+  await video.play();
+  currentDeviceId = stream.getVideoTracks()[0]?.getSettings()?.deviceId;
+  document.getElementById("status-wrap").style.display = "none";
+  if (!loopStarted) {
+    loopStarted = true;
+    requestAnimationFrame(loop);
+  }
   renderCamOptions();
 }
 
@@ -418,9 +421,12 @@ video {
   color: rgba(255,255,255,0.6);
 }
 
-.mesh-toggle {
-  position: absolute;
-  bottom: 10px; right: 10px;
+.panel-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ctrl-btn {
   padding: 5px 10px;
   border-radius: 999px;
   font-size: 9px;
@@ -431,39 +437,27 @@ video {
   border: 1px solid rgba(154, 230, 110, 0.4);
   color: #9ae66e;
   cursor: pointer;
-  z-index: 5;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.mesh-toggle.off {
+.ctrl-btn.off {
   background: rgba(255,255,255,0.06);
   border-color: rgba(255,255,255,0.15);
   color: rgba(255,255,255,0.35);
 }
 .cam-select-wrap {
-  position: absolute;
-  top: 10px; right: 10px;
-  z-index: 5;
-}
-.cam-select-btn {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.2em;
-  font-family: inherit;
-  background: rgba(0,0,0,0.75);
-  border: 1px solid rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.85);
-  cursor: pointer;
+  position: relative;
 }
 .cam-dropdown {
-  margin-top: 6px;
-  background: rgba(10,10,12,0.95);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: rgba(10,10,12,0.97);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
   overflow: hidden;
   min-width: 160px;
   max-width: 240px;
+  z-index: 20;
 }
 .cam-dropdown.hidden { display: none; }
 .cam-option {
@@ -485,19 +479,6 @@ video {
 }
 .cam-option:hover { background: rgba(255,255,255,0.06); color: #fff; }
 .cam-option.active { color: var(--green); }
-.cam-badge {
-  position: absolute;
-  top: 10px; left: 10px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.22em;
-  background: rgba(0,0,0,0.75);
-  border: 1px solid rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.85);
-  z-index: 5;
-}
 
 /* score panel */
 .score-panel {
@@ -647,12 +628,6 @@ footer {
   <div class="cam-wrap">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
-    <div class="cam-badge">YOU</div>
-    <button id="mesh-toggle" class="mesh-toggle off" title="Toggle face outline">OUTLINE OFF</button>
-    <div class="cam-select-wrap">
-      <button id="cam-btn" class="cam-select-btn" title="Switch camera">⌖ CAM</button>
-      <div id="cam-dropdown" class="cam-dropdown hidden"></div>
-    </div>
     <div id="status-wrap">
       <div class="spinner"></div>
       <div id="status">INITIALISING…</div>
@@ -662,6 +637,13 @@ footer {
   <!-- score -->
   <div class="score-panel">
     <div class="panel-title">LIVE SCAN</div>
+    <div class="panel-controls">
+      <button id="mesh-toggle" class="ctrl-btn off">OUTLINE OFF</button>
+      <div class="cam-select-wrap">
+        <button id="cam-btn" class="ctrl-btn">⌖ CAM</button>
+        <div id="cam-dropdown" class="cam-dropdown hidden"></div>
+      </div>
+    </div>
     <div id="score-panel">
       <div class="no-face">WAITING FOR FACE…</div>
     </div>
