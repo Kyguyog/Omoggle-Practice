@@ -120,10 +120,7 @@ async function init() {
       outputFaceBlendshapes: false,
     });
     document.getElementById("status").textContent = "STARTING CAMERA…";
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode:"user", width:{ideal:720}, height:{ideal:1280} }
-    });
-    video.srcObject = stream;
+    await startCamera(null);
     video.addEventListener("loadeddata", () => {
       document.getElementById("status-wrap").style.display = "none";
       requestAnimationFrame(loop);
@@ -268,6 +265,48 @@ document.getElementById("mesh-toggle").addEventListener("click", function() {
   this.textContent = showMesh ? "OUTLINE ON" : "OUTLINE OFF";
   this.classList.toggle("off", !showMesh);
 });
+
+// ── camera selector ──────────────────────────────────────────────────────────
+let currentDeviceId = null;
+
+async function startCamera(deviceId) {
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+  }
+  const constraints = {
+    video: { width: { ideal: 720 }, height: { ideal: 1280 }, ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "user" }) }
+  };
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  video.srcObject = stream;
+  currentDeviceId = deviceId || stream.getVideoTracks()[0]?.getSettings()?.deviceId;
+  renderCamOptions();
+}
+
+async function renderCamOptions() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cams = devices.filter(d => d.kind === "videoinput");
+  const dropdown = document.getElementById("cam-dropdown");
+  dropdown.innerHTML = cams.map((d, i) =>
+    `<button class="cam-option${d.deviceId === currentDeviceId ? " active" : ""}" data-id="${d.deviceId}">
+      ${d.label || "CAMERA " + (i + 1)}
+    </button>`
+  ).join("");
+  dropdown.querySelectorAll(".cam-option").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      dropdown.classList.add("hidden");
+      await startCamera(btn.dataset.id);
+    });
+  });
+}
+
+const camBtn = document.getElementById("cam-btn");
+const camDropdown = document.getElementById("cam-dropdown");
+camBtn.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  await renderCamOptions();
+  camDropdown.classList.toggle("hidden");
+});
+document.addEventListener("click", () => camDropdown.classList.add("hidden"));
 </script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -400,6 +439,52 @@ video {
   border-color: rgba(255,255,255,0.15);
   color: rgba(255,255,255,0.35);
 }
+.cam-select-wrap {
+  position: absolute;
+  top: 10px; right: 10px;
+  z-index: 5;
+}
+.cam-select-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  font-family: inherit;
+  background: rgba(0,0,0,0.75);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+}
+.cam-dropdown {
+  margin-top: 6px;
+  background: rgba(10,10,12,0.95);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  min-width: 160px;
+  max-width: 240px;
+}
+.cam-dropdown.hidden { display: none; }
+.cam-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  font-family: inherit;
+  color: rgba(255,255,255,0.6);
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cam-option:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.cam-option.active { color: var(--green); }
 .cam-badge {
   position: absolute;
   top: 10px; left: 10px;
@@ -472,7 +557,7 @@ video {
   letter-spacing: 0.18em;
   color: var(--red);
 }
-.sub-scores { display: flex; flex-direction: column; gap: 6px; }
+.sub-scores { display: flex; flex-direction: column; gap: 12px; }
 .sub-row {
   display: flex;
   align-items: center;
@@ -564,6 +649,10 @@ footer {
     <canvas id="overlay"></canvas>
     <div class="cam-badge">YOU</div>
     <button id="mesh-toggle" class="mesh-toggle off" title="Toggle face outline">OUTLINE OFF</button>
+    <div class="cam-select-wrap">
+      <button id="cam-btn" class="cam-select-btn" title="Switch camera">⌖ CAM</button>
+      <div id="cam-dropdown" class="cam-dropdown hidden"></div>
+    </div>
     <div id="status-wrap">
       <div class="spinner"></div>
       <div id="status">INITIALISING…</div>
