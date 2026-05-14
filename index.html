@@ -105,7 +105,7 @@ let landmarker = null;
 let lastLandmarks = null;
 let scoreHistory = [];
 let smoothScore = null;
-let showMesh = true;
+let showMesh = false;
 
 async function init() {
   document.getElementById("status").textContent = "LOADING AI MODEL…";
@@ -560,7 +560,7 @@ footer {
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
     <div class="cam-badge">YOU</div>
-    <button id="mesh-toggle" class="mesh-toggle" title="Toggle face outline">OUTLINE ON</button>
+    <button id="mesh-toggle" class="mesh-toggle off" title="Toggle face outline">OUTLINE OFF</button>
     <div id="status-wrap">
       <div class="spinner"></div>
       <div id="status">INITIALISING…</div>
