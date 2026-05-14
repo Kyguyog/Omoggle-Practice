@@ -87,25 +87,13 @@ function tierFromOverall(s) {
                 return { name:"UNRANKED",  color:"#666" };
 }
 
-// ── landmark indices for drawing (exact from ommogle) ───────────────────────
-const JAW   = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
-const LBROW = [70,63,105,66,107,55,65,52,53,46];
-const RBROW = [300,293,334,296,336,285,295,282,283,276];
-const LEYE  = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246,33];
-const REYE  = [263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466,263];
-const LIPS  = [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185,61];
-const NOSE  = [168,6,197,195,5,4,1];
-
 // ── main ─────────────────────────────────────────────────────────────────────
 const video   = document.getElementById("webcam");
-const canvas  = document.getElementById("overlay");
-const ctx     = canvas.getContext("2d");
 
 let landmarker = null;
 let lastLandmarks = null;
 let scoreHistory = [];
 let smoothScore = null;
-let showMesh = false;
 
 async function init() {
   document.getElementById("status").textContent = "LOADING AI MODEL…";
@@ -126,67 +114,10 @@ async function init() {
   }
 }
 
-function drawPath(pts, lw, color) {
-  if (!lastLandmarks) return;
-  const W = canvas.width, H = canvas.height;
-  ctx.beginPath();
-  ctx.lineWidth = lw;
-  ctx.strokeStyle = color;
-  ctx.lineCap = "round"; ctx.lineJoin = "round";
-  let first = true;
-  for (const i of pts) {
-    const p = lastLandmarks[i];
-    if (!p) continue;
-    // mirror X because video is flipped
-    const x = (1 - p.x) * W, y = p.y * H;
-    first ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    first = false;
-  }
-  ctx.stroke();
-}
-
-function drawDots(ids, color) {
-  if (!lastLandmarks) return;
-  const W = canvas.width, H = canvas.height;
-  ctx.fillStyle = color;
-  for (const i of ids) {
-    const p = lastLandmarks[i];
-    if (!p) continue;
-    ctx.beginPath();
-    ctx.arc((1 - p.x) * W, p.y * H, 2.8, 0, 2*Math.PI);
-    ctx.fill();
-  }
-}
-
-function renderMesh(highlight) {
-  const GREEN = "rgba(154, 230, 110, 0.85)";
-  const GOLD  = "#ffd54a";
-  const hl = (feature) => highlight === feature || highlight === "FACE";
-  drawPath(JAW,   hl("JAWLINE") ? 3.5 : 1.2, hl("JAWLINE") ? GOLD : GREEN);
-  drawPath(LBROW, hl("BROWS")   ? 3.0 : 1.2, hl("BROWS")   ? GOLD : GREEN);
-  drawPath(RBROW, hl("BROWS")   ? 3.0 : 1.2, hl("BROWS")   ? GOLD : GREEN);
-  drawPath(LEYE,  hl("EYES")    ? 3.0 : 1.2, hl("EYES")    ? GOLD : GREEN);
-  drawPath(REYE,  hl("EYES")    ? 3.0 : 1.2, hl("EYES")    ? GOLD : GREEN);
-  drawPath(LIPS,  hl("LIPS")    ? 3.0 : 1.2, hl("LIPS")    ? GOLD : GREEN);
-  drawPath(NOSE,  hl("NOSE")    ? 3.0 : 1.2, hl("NOSE")    ? GOLD : GREEN);
-  drawDots([33,263,1,152,61,291], hl("FACE") ? GOLD : "rgba(154, 230, 110, 0.95)");
-}
-
-let highlight = null;
-let highlightTimer = null;
-
 function loop(ts) {
   requestAnimationFrame(loop);
 
   // size canvas to video
-  const rect = video.getBoundingClientRect();
-  if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
-    canvas.width  = Math.round(rect.width);
-    canvas.height = Math.round(rect.height);
-  }
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   if (!video.videoWidth) return;
 
   const result = landmarker.detectForVideo(video, ts);
@@ -197,7 +128,6 @@ function loop(ts) {
   }
 
   lastLandmarks = result.faceLandmarks[0];
-  if (showMesh) renderMesh(highlight);
 
   const score = scoreLandmarks(lastLandmarks);
   if (!score) return;
@@ -209,13 +139,6 @@ function loop(ts) {
 
   updateUI({ ...score, overall: smoothScore });
 
-  // rotate highlight to top feature every 4s
-  if (!highlightTimer) {
-    const sorted = Object.entries(score.sub).sort((a,b)=>b[1]-a[1]);
-    const map = { symmetry:"JAWLINE", canthalTilt:"EYES", jawSharpness:"JAWLINE", eyeOpenness:"EYES", poseStability:"FACE", smileNeutral:"LIPS" };
-    highlight = map[sorted[0][0]];
-    highlightTimer = setTimeout(() => { highlight = null; highlightTimer = null; }, 4000);
-  }
 }
 
 function bar(val) {
@@ -255,12 +178,6 @@ function updateUI(score) {
 }
 
 init();
-
-document.getElementById("mesh-toggle").addEventListener("click", function() {
-  showMesh = !showMesh;
-  this.textContent = showMesh ? "OUTLINE ON" : "OUTLINE OFF";
-  this.classList.toggle("off", !showMesh);
-});
 
 // ── camera selector ──────────────────────────────────────────────────────────
 let currentDeviceId = null;
@@ -389,11 +306,6 @@ video {
   object-fit: cover;
   transform: scaleX(-1);
   display: block;
-}
-#overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
 }
 #status-wrap {
   position: absolute;
@@ -627,7 +539,6 @@ footer {
   <!-- camera -->
   <div class="cam-wrap">
     <video id="webcam" autoplay playsinline muted></video>
-    <canvas id="overlay"></canvas>
     <div id="status-wrap">
       <div class="spinner"></div>
       <div id="status">INITIALISING…</div>
@@ -638,7 +549,6 @@ footer {
   <div class="score-panel">
     <div class="panel-title">LIVE SCAN</div>
     <div class="panel-controls">
-      <button id="mesh-toggle" class="ctrl-btn off">OUTLINE OFF</button>
       <div class="cam-select-wrap">
         <button id="cam-btn" class="ctrl-btn">⌖ CAM</button>
         <div id="cam-dropdown" class="cam-dropdown hidden"></div>
