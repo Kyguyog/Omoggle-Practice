@@ -286,12 +286,13 @@ document.getElementById("mesh-toggle").addEventListener("click", function() {
 body {
   background: var(--bg);
   color: #fff;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
 }
 
 header {
@@ -318,9 +319,10 @@ header .dot {
 
 .arena {
   width: 100%;
-  max-width: 900px;
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: auto 1fr;
   gap: 10px;
 }
 @media(max-width:640px){
@@ -331,7 +333,10 @@ header .dot {
 .cam-wrap {
   position: relative;
   aspect-ratio: 9/12;
-  max-height: 70dvh;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  justify-self: center;
   background: var(--card);
   border-radius: 16px;
   overflow: hidden;
@@ -418,6 +423,8 @@ video {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  height: 100%;
 }
 .panel-title {
   font-size: 9px;
@@ -517,12 +524,12 @@ video {
 /* info tips */
 .tips {
   width: 100%;
-  max-width: 900px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 4px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  flex-shrink: 0;
 }
+@media(max-width:800px){ .tips { grid-template-columns: repeat(3, 1fr); } }
 @media(max-width:480px){ .tips { grid-template-columns: 1fr 1fr; } }
 .tip {
   background: var(--card);
@@ -548,11 +555,14 @@ footer {
 </head>
 <body>
 
+
+
 <div class="arena">
   <!-- camera -->
   <div class="cam-wrap">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
+    <div class="cam-badge">YOU</div>
     <button id="mesh-toggle" class="mesh-toggle off" title="Toggle face outline">OUTLINE OFF</button>
     <div id="status-wrap">
       <div class="spinner"></div>
@@ -569,14 +579,9 @@ footer {
   </div>
 </div>
 
-<div class="tips">
-  <div class="tip"><strong>SYMMETRY</strong>Face your camera straight-on. Even lighting helps.</div>
-  <div class="tip"><strong>CANTHAL TILT</strong>Outer eye corners higher than inner = positive tilt.</div>
-  <div class="tip"><strong>JAWLINE</strong>Clench slightly. Defined jaw angle scores higher.</div>
-  <div class="tip"><strong>HUNTER EYES</strong>Slight squint, not wide-eyed. Lidded = based.</div>
-  <div class="tip"><strong>POSE</strong>Look straight into the lens. No tilt, no rotation.</div>
-  <div class="tip"><strong>AURA</strong>Neutral lips, slight Mona Lisa. No forced expression.</div>
-</div>
+
+
+
 
 </body>
 </html>
