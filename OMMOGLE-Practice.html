@@ -114,7 +114,7 @@ async function init() {
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
     );
     landmarker = await FaceLandmarker.createFromOptions(fr, {
-      baseOptions: { modelAssetPath: "./face_landmarker.task" },
+      baseOptions: { modelAssetPath: "https://cdn.jsdelivr.net/gh/Kyguyog/Omoggle-Practice@main/face_landmarker.task" },
       numFaces: 1,
       runningMode: "VIDEO",
       outputFaceBlendshapes: false,
@@ -548,18 +548,11 @@ footer {
 </head>
 <body>
 
-<header>
-  <span class="logo">OMMOGLE</span>
-  <div class="dot"></div>
-  <span>SOLO SCAN · PRACTICE MODE</span>
-</header>
-
 <div class="arena">
   <!-- camera -->
   <div class="cam-wrap">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
-    <div class="cam-badge">YOU</div>
     <button id="mesh-toggle" class="mesh-toggle off" title="Toggle face outline">OUTLINE OFF</button>
     <div id="status-wrap">
       <div class="spinner"></div>
@@ -584,8 +577,6 @@ footer {
   <div class="tip"><strong>POSE</strong>Look straight into the lens. No tilt, no rotation.</div>
   <div class="tip"><strong>AURA</strong>Neutral lips, slight Mona Lisa. No forced expression.</div>
 </div>
-
-<footer>SCORES MATCH OMMOGLE'S EXACT ALGORITHM · PRACTICE LOCALLY · NO DATA SENT</footer>
 
 </body>
 </html>
