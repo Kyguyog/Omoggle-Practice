@@ -105,6 +105,7 @@ let landmarker = null;
 let lastLandmarks = null;
 let scoreHistory = [];
 let smoothScore = null;
+let showMesh = true;
 
 async function init() {
   document.getElementById("status").textContent = "LOADING AI MODEL…";
@@ -203,7 +204,7 @@ function loop(ts) {
   }
 
   lastLandmarks = result.faceLandmarks[0];
-  renderMesh(highlight);
+  if (showMesh) renderMesh(highlight);
 
   const score = scoreLandmarks(lastLandmarks);
   if (!score) return;
@@ -261,6 +262,12 @@ function updateUI(score) {
 }
 
 init();
+
+document.getElementById("mesh-toggle").addEventListener("click", function() {
+  showMesh = !showMesh;
+  this.textContent = showMesh ? "OUTLINE ON" : "OUTLINE OFF";
+  this.classList.toggle("off", !showMesh);
+});
 </script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -367,6 +374,27 @@ video {
   color: rgba(255,255,255,0.6);
 }
 
+.mesh-toggle {
+  position: absolute;
+  bottom: 10px; right: 10px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  font-family: inherit;
+  background: rgba(154, 230, 110, 0.15);
+  border: 1px solid rgba(154, 230, 110, 0.4);
+  color: #9ae66e;
+  cursor: pointer;
+  z-index: 5;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.mesh-toggle.off {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.35);
+}
 .cam-badge {
   position: absolute;
   top: 10px; left: 10px;
@@ -532,6 +560,7 @@ footer {
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
     <div class="cam-badge">YOU</div>
+    <button id="mesh-toggle" class="mesh-toggle" title="Toggle face outline">OUTLINE ON</button>
     <div id="status-wrap">
       <div class="spinner"></div>
       <div id="status">INITIALISING…</div>
