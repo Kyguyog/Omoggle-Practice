@@ -6,85 +6,202 @@
 <title>MOG ARENA — SOLO SCAN</title>
 <script type="module">
 import { FaceLandmarker, FilesetResolver, DrawingUtils } from
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
+  "./vision_bundle.js";
 
-// ── helpers (exact from ommogle source) ──────────────────────────────────────
-const clamp01 = e => Math.max(0, Math.min(1, e));
-const clampR  = (e, t, r) => Math.max(t, Math.min(r, e));
-const dist    = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+// ── helpers ───────────────────────────────────────────────────────────────────
+const clampR = (e, t, r) => Math.max(t, Math.min(r, e));
+const dist   = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const atan2deg = (y, x) => Math.atan2(y, x) * (180 / Math.PI);
 
-function scoreLandmarks(e) {
-  if (!e || e.length < 400) return null;
-
-  // ── symmetry ──────────────────────────────────────────────────────────────
-  const symmetry = (() => {
-    const top = e[10], bot = e[152], midX = (top.x + bot.x) / 2;
-    let diff = 0, total = 0;
-    for (const [l, r] of [[33,263],[133,362],[70,300],[55,285],[61,291],[172,397]]) {
-      const lx = Math.abs(e[l].x - midX), rx = Math.abs(e[r].x - midX);
-      diff += Math.abs(lx - rx); total += (lx + rx) / 2;
-    }
-    return total === 0 ? 0.5 : clamp01(1 - diff / total);
-  })();
-
-  // ── canthal tilt ─────────────────────────────────────────────────────────
-  const slope = (a, b) => (b.y - a.y) / (Math.abs(b.x - a.x) || 1);
-  const canthalTilt = clamp01(((slope(e[33], e[133]) + slope(e[263], e[362])) / 2 + 0.05) / 0.25);
-
-  // ── jaw sharpness ─────────────────────────────────────────────────────────
-  const jawSharpness = (() => {
-    const c = e[152], d = e[172], u = e[397];
-    const f = { x: d.x - c.x, y: d.y - c.y };
-    const m = { x: u.x - c.x, y: u.y - c.y };
-    const dot = f.x*m.x + f.y*m.y;
-    const denom = (Math.hypot(f.x, f.y) * Math.hypot(m.x, m.y)) || 1;
-    return clamp01((150 - 180 * Math.acos(clampR(dot / denom, -1, 1)) / Math.PI) / 60);
-  })();
-
-  // ── eye openness (hunter eyes) ────────────────────────────────────────────
-  const eyeOpenness = (() => {
-    const h = Math.abs(e[159].y - e[145].y);
-    const x = Math.abs(e[386].y - e[374].y);
-    const lw = dist(e[33], e[133]) || 1;
-    const rw = dist(e[263], e[362]) || 1;
-    return clamp01(((h / lw + x / rw) / 2 - 0.1) / 0.25);
-  })();
-
-  // ── pose / forward growth ────────────────────────────────────────────────
-  const poseStability = (() => {
-    const midX = (e[10].x + e[152].x) / 2;
-    const faceW = Math.abs(e[172].x - e[397].x) || 1;
-    const noseDevX = Math.abs((e[1].x - midX) / faceW);
-    const midY = (e[10].y + e[152].y) / 2;
-    const faceH = Math.abs(e[152].y - e[10].y) || 1;
-    const noseDevY = Math.abs((e[1].y - midY) / faceH);
-    return clamp01(1 - Math.max(noseDevX, noseDevY) / 0.4);
-  })();
-
-  // ── smile neutral (aura) ─────────────────────────────────────────────────
-  const smileNeutral = clamp01(1 - 80 * Math.abs(e[13].y - (e[61].y + e[291].y) / 2 - 0.005));
-
-  const sub = { symmetry, canthalTilt, jawSharpness, eyeOpenness, poseStability, smileNeutral };
-
-  const overall = clampR(
-    3 + (1.4*symmetry + 1.3*canthalTilt + 1.2*jawSharpness + 0.7*eyeOpenness + 0.9*poseStability + 0.5*smileNeutral)
-      / (2.7 + 1.2 + 0.7 + 0.9 + 0.5) * 6.5,
-    1, 10
-  );
-
-  const POS = { symmetry:"SYMMETRY", canthalTilt:"POSITIVE CANTHAL TILT", jawSharpness:"SHARP JAWLINE", eyeOpenness:"HUNTER EYES", poseStability:"FORWARD GROWTH", smileNeutral:"AURA" };
-  const NEG = { symmetry:"ASYMMETRY", canthalTilt:"NEGATIVE CANTHAL TILT", jawSharpness:"SOFT JAW", eyeOpenness:"HOODED HARD", poseStability:"BAD POSE", smileNeutral:"NPC ENERGY" };
-
-  const sorted = Object.keys(sub).slice().sort((a, b) => sub[b] - sub[a]);
-  return { overall, don: POS[sorted[0]], flaw: NEG[sorted[sorted.length-1]], sub };
+// scoreRange: maps a value to 0–10, 10 in [ideal_lo, ideal_hi], tapering to 0 outside [outer_lo, outer_hi]
+function scoreRange(e, idealLo, idealHi, outerLo, outerHi) {
+  if (!Number.isFinite(e)) return 0;
+  if (e >= idealLo && e <= idealHi) return 10;
+  if (e < idealLo) return clampR((e - outerLo) / (idealLo - outerLo) * 10, 0, 10);
+  return clampR((outerHi - e) / (outerHi - idealHi) * 10, 0, 10);
 }
 
-function tierFromOverall(s) {
-  if (s >= 9)   return { name:"MOG GOD",   color:"#ffd54a" };
-  if (s >= 8)   return { name:"CHADLITE",  color:"#a855f7" };
-  if (s >= 6.5) return { name:"MTN",       color:"#60a5fa" };
-  if (s >= 5)   return { name:"MID",       color:"#999" };
-                return { name:"UNRANKED",  color:"#666" };
+// Symmetry pairs (exact from real site source)
+const SYM_PAIRS = [
+  [33,263],[133,362],[70,300],[63,293],[105,334],
+  [46,276],[116,345],[123,352],[50,280],[187,411],
+  [132,361],[174,399],[150,379],[172,397],[136,365],
+  [171,396],[148,377],[176,401],[58,288]
+];
+
+function scoreLandmarks(e, opts = {}) {
+  if (!e || e.length < 468) return null;
+
+  const videoWidth  = opts.videoWidth  || 1;
+  const videoHeight = opts.videoHeight || 1;
+  const aspect = videoHeight > 0 ? videoWidth / videoHeight : 1;
+
+  // Aspect-correct x so geometry is in real proportions
+  const ac = lm => ({ x: lm.x * aspect, y: lm.y, z: lm.z || 0 });
+
+  // ── head roll ─────────────────────────────────────────────────────────────
+  const roll = atan2deg(ac(e[10]).x - ac(e[152]).x, ac(e[152]).y - ac(e[10]).y) - 90; // approx from source
+  // Real source: atan2(e[152].y-e[10].y, e[152].x-e[10].x)*180/PI - 90 gives canthal tilt reference
+  // Actually source computes: l(u(e[10]),u(e[152]))-90  where l=atan2 in degrees
+  const rollDeg = atan2deg(ac(e[152]).y - ac(e[10]).y, ac(e[152]).x - ac(e[10]).x) - 90;
+
+  // nose pivot point
+  const pivot = ac(e[1]);
+
+  // Rotate landmark around pivot by -rollDeg to de-roll the face
+  function rotated(idx) {
+    const p = ac(e[idx]);
+    const ang = -rollDeg * Math.PI / 180;
+    const cosA = Math.cos(ang), sinA = Math.sin(ang);
+    const dx = p.x - pivot.x, dy = p.y - pivot.y;
+    return { x: pivot.x + dx*cosA - dy*sinA, y: pivot.y + dx*sinA + dy*cosA, z: p.z || 0 };
+  }
+
+  // ── canthal tilt (degrees, positive = outer corner higher = good) ─────────
+  // Source: average of left+right eye axis angles, negated
+  const eyeAngleL = atan2deg(rotated(133).y - rotated(33).y,  rotated(133).x - rotated(33).x);
+  const eyeAngleR = atan2deg(rotated(263).y - rotated(362).y, rotated(263).x - rotated(362).x);
+  const canthalTilt = -((eyeAngleL + eyeAngleR) / 2); // degrees; positive = positive tilt
+
+  // ── face bounding box (de-rolled) ────────────────────────────────────────
+  const faceW = dist(rotated(234), rotated(454));
+  const faceH = dist(rotated(10),  rotated(152));
+
+  // ── jaw width ratio (mouth width / face width) ────────────────────────────
+  // Source: jawWidth = dist(234,454) used as width; 3 mouth-open landmark pairs
+  let maxMouth = 0;
+  for (const [a, b] of [[172,397],[150,379],[171,396]]) {
+    const d = dist(rotated(a), rotated(b));
+    if (d > maxMouth) maxMouth = d;
+  }
+  const jawWidth = faceH > 0 ? maxMouth / faceH : 0; // O in source
+
+  // ── symmetry (0–100 integer) ───────────────────────────────────────────────
+  const faceCX = (rotated(133).x + rotated(362).x) / 2;
+  const faceCY = (rotated(10).y  + rotated(152).y) / 2;
+  let symDiff = 0;
+  for (const [l, r] of SYM_PAIRS) {
+    const lp = rotated(l), rp = rotated(r);
+    const lox = Math.abs(lp.x - faceCX), rox = Math.abs(rp.x - faceCX);
+    const loy = Math.abs(lp.y - faceCY), roy = Math.abs(rp.y - faceCY);
+    symDiff += (faceW > 0 ? Math.abs(lox - rox) / faceW : 0)
+             + (faceH > 0 ? Math.abs(loy - roy) / faceH : 0);
+  }
+  const symmetry = Math.round((1 - clampR(symDiff / (2 * SYM_PAIRS.length) / 0.09, 0, 1)) * 100);
+
+  // ── midface ratio (nose tip y position relative to face height) ───────────
+  const eyeMidY = (rotated(133).y + rotated(362).y) / 2; // avg of inner eye corners
+  const noseTipY = Math.abs(rotated(0).y - eyeMidY);
+  const midfaceRatio = faceH > 0 ? noseTipY / faceH : 0; // k in source
+
+  // ── cheekbone width (face width / jaw width) ──────────────────────────────
+  const jawW_px = dist(rotated(234), rotated(454)); // re-use face width as proxy
+  const cheekboneWidth = maxMouth > 0 ? jawW_px / maxMouth : 0; // N in source
+
+  // ── eye aspect ratio (openness, lower = more hunter) ─────────────────────
+  const eyeOpenL  = dist(rotated(159), rotated(145));
+  const eyeWidthL = dist(rotated(33),  rotated(133));
+  const eyeOpenR  = dist(rotated(386), rotated(374));
+  const eyeWidthR = dist(rotated(263), rotated(362));
+  const eyeAspectRatio = Math.max(0.2,
+    ((eyeWidthL > 0 ? eyeOpenL / eyeWidthL : 0) +
+     (eyeWidthR > 0 ? eyeOpenR / eyeWidthR : 0)) / 2
+  ); // L in source
+
+  // ── inter-eye ratio (eye distance / face width) ───────────────────────────
+  const eyeDist = faceW > 0 ? dist(rotated(133), rotated(362)) / faceW : 0;
+
+  // ── component scores (0–10 each) ─────────────────────────────────────────
+  const sCanthal   = scoreRange(canthalTilt,    2,    6.5,  -2,   11);
+  const sJawWidth  = scoreRange(jawWidth,        0.58, 0.78,  0.42, 0.96);
+  const sMidface   = scoreRange(midfaceRatio,    0.27, 0.34,  0.20, 0.43);
+  const sCheek     = scoreRange(cheekboneWidth,  1.04, 1.24,  0.86, 1.48);
+  const sEye       = scoreRange(eyeAspectRatio,  0.22, 0.30,  0.18, 0.43);
+  const sEyeDist   = scoreRange(eyeDist,         0.22, 0.31,  0.15, 0.42);
+
+  // ── harmony (weighted sub-composite, 0–10) ────────────────────────────────
+  // Source: U = round((0.18*X + 0.24*A + 0.18*J + 0.16*G + 0.24*eyeDist)*10)/10
+  // where X=sJawWidth, A=sMidface, J=sCheek, G=sEye
+  const harmony = Math.round(
+    (0.18 * sJawWidth + 0.24 * sMidface + 0.18 * sCheek + 0.16 * sEye + 0.24 * sEyeDist) * 10
+  ) / 10;
+
+  // ── overall (before confidence scaling) ───────────────────────────────────
+  // Source: $ = 0.12*W + 0.14*X + E/10*0.24 + 0.14*A + 0.1*J + 0.08*G + 0.18*U
+  // W=sCanthal, X=sJawWidth, E=symmetry(0-100), A=sMidface, J=sCheek, G=sEye, U=harmony
+  const rawOverall =
+    0.12 * sCanthal +
+    0.14 * sJawWidth +
+    (symmetry / 10) * 0.24 +
+    0.14 * sMidface +
+    0.10 * sCheek +
+    0.08 * sEye +
+    0.18 * harmony;
+
+  // ── confidence scaling ────────────────────────────────────────────────────
+  // In the real app, validation gives a confidence [0,1]. Without live validation
+  // we assume a "warning"-level confidence of ~0.7 (good lighting, face detected).
+  // Source: "warning" → clampR(0.45 + 0.35 * confidence, 0.55, 0.78)
+  // We use confidence=0.7 as default (camera is on, face detected).
+  const confidence = opts.confidence !== undefined ? opts.confidence : 0.7;
+  const scaleFactor = clampR(0.45 + 0.35 * confidence, 0.55, 0.78);
+
+  const overall = Math.round(10 * clampR(rawOverall * scaleFactor, 1.1, 10)) / 10;
+
+  // ── dominant feature & flaw (matches f() in real source) ─────────────────
+  // Component scores mapped to trait labels (same order as source)
+  const traits = [
+    { name: "Symmetry",      score: symmetry / 10, good: "Balanced Facial Thirds",  bad: "Poor Facial Harmony" },
+    { name: "Canthal Tilt",  score: sCanthal / 10, good: "Positive Canthal Tilt",   bad: "Negative Canthal Tilt" },
+    { name: "Jawline",       score: sJawWidth / 10,good: "Strong Jawline",           bad: "Weak Jawline" },
+    { name: "Midface",       score: sMidface / 10, good: "Forward Maxilla",          bad: "Recessed Maxilla" },
+    { name: "Cheekbones",    score: sCheek / 10,   good: "High Cheekbones",          bad: "Flat Cheekbones" },
+    { name: "Eye Shape",     score: sEye / 10,     good: "Hunter Eyes",              bad: "Long Philtrum" },
+    { name: "Harmony",       score: harmony / 10,  good: "Forward-Grown Chin",       bad: "Recessed Chin" },
+  ];
+  traits.sort((a, b) => b.score - a.score);
+  const dominant = traits[0].good;
+  const flaw     = traits[traits.length - 1].bad;
+
+  // Sub-scores normalized to 0–1 for bar display
+  const sub = {
+    canthalTilt:     clampR(sCanthal   / 10, 0, 1),
+    jawWidth:        clampR(sJawWidth  / 10, 0, 1),
+    symmetry:        clampR(symmetry   / 100, 0, 1),
+    midfaceRatio:    clampR(sMidface   / 10, 0, 1),
+    cheekboneWidth:  clampR(sCheek     / 10, 0, 1),
+    eyeAspectRatio:  clampR(sEye       / 10, 0, 1),
+    harmony:         clampR(harmony    / 10, 0, 1),
+  };
+
+  return { overall, dominant, flaw, sub, rawScores: { canthalTilt, jawWidth, symmetry, midfaceRatio, cheekboneWidth, eyeAspectRatio, harmony } };
+}
+
+// ── tier system (exact from real site: 20503 module, oO function) ─────────────
+const TIERS = [
+  { name:"Molecule", emoji:"🗿", hexColor:"#cbd5e1", minElo:-Infinity, maxElo:-1 },
+  { name:"Sub3",     emoji:"🦀", hexColor:"#b45309", minElo:1,    maxElo:500 },
+  { name:"LTN",      emoji:"🌙", hexColor:"#34d399", minElo:501,  maxElo:1000 },
+  { name:"MTN",      emoji:"⭐", hexColor:"#86efac", minElo:1001, maxElo:1500 },
+  { name:"HTN",      emoji:"🌟", hexColor:"#a3e635", minElo:1501, maxElo:2000 },
+  { name:"Chadlite", emoji:"⚜️", hexColor:"#facc15", minElo:2001, maxElo:3500 },
+  { name:"Chad",     emoji:"👑", hexColor:"#fb923c", minElo:3501, maxElo:5000 },
+  { name:"Slayer",   emoji:"☠️", hexColor:"#f472b6", minElo:5001, maxElo:20000 },
+  { name:"Adam",     emoji:"🍎", hexColor:"#ef4444", minElo:20001,maxElo:null },
+];
+
+// oO: map overall score (0–10) to a tier (same thresholds as real site)
+function tierFromOverall(score) {
+  const s = Math.max(0, Math.min(10, score || 0));
+  const name = s >= 9.7 ? "Adam"
+             : s >= 9.5 ? "Slayer"
+             : s >= 8.9 ? "Chad"
+             : s >= 8.3 ? "Chadlite"
+             : s >= 7.0 ? "HTN"
+             : s >= 5.6 ? "MTN"
+             : s >= 3.1 ? "LTN"
+             : "Sub3";
+  return TIERS.find(t => t.name === name) || TIERS[1];
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -99,10 +216,10 @@ async function init() {
   document.getElementById("status").textContent = "LOADING AI MODEL…";
   try {
     const fr = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm"
+      "./"
     );
     landmarker = await FaceLandmarker.createFromOptions(fr, {
-      baseOptions: { modelAssetPath: "https://cdn.jsdelivr.net/gh/Kyguyog/Omoggle-Practice@main/face_landmarker.task" },
+      baseOptions: { modelAssetPath: "./face_landmarker.task" },
       numFaces: 1,
       runningMode: "VIDEO",
       outputFaceBlendshapes: false,
@@ -129,7 +246,10 @@ function loop(ts) {
 
   lastLandmarks = result.faceLandmarks[0];
 
-  const score = scoreLandmarks(lastLandmarks);
+  const score = scoreLandmarks(lastLandmarks, {
+    videoWidth:  video.videoWidth,
+    videoHeight: video.videoHeight,
+  });
   if (!score) return;
 
   // smooth score over last 10 frames
@@ -150,7 +270,15 @@ function bar(val) {
   </div>`;
 }
 
-const LABELS = { symmetry:"SYMMETRY", canthalTilt:"CANTHAL TILT", jawSharpness:"JAWLINE", eyeOpenness:"EYE OPEN", poseStability:"POSE", smileNeutral:"AURA" };
+const LABELS = {
+  canthalTilt:    "CANTHAL TILT",
+  jawWidth:       "JAWLINE",
+  symmetry:       "SYMMETRY",
+  midfaceRatio:   "MIDFACE",
+  cheekboneWidth: "CHEEKBONES",
+  eyeAspectRatio: "EYE SHAPE",
+  harmony:        "HARMONY",
+};
 
 function updateUI(score) {
   const scoreEl = document.getElementById("score-panel");
@@ -161,15 +289,15 @@ function updateUI(score) {
   const tier = tierFromOverall(score.overall);
   scoreEl.innerHTML = `
     <div class="overall">${score.overall.toFixed(1)}</div>
-    <div class="tier" style="color:${tier.color}">★ ${tier.name}</div>
+    <div class="tier" style="color:${tier.hexColor}">${tier.emoji} ${tier.name.toUpperCase()}</div>
     <div class="don-flaw">
-      <span class="don">${score.don}</span>
-      <span class="flaw">${score.flaw}</span>
+      <span class="don">✦ ${score.dominant.toUpperCase()}</span>
+      <span class="flaw">✦ ${score.flaw.toUpperCase()}</span>
     </div>
     <div class="sub-scores">
       ${Object.entries(score.sub).map(([k, v]) =>
         `<div class="sub-row">
-          <span class="sub-label">${LABELS[k]}</span>
+          <span class="sub-label">${LABELS[k] || k}</span>
           ${bar(v)}
         </div>`
       ).join("")}
