@@ -81,7 +81,7 @@ function scoreLandmarks(e) {
 
 function tierFromOverall(s) {
   if (s >= 9)   return { name:"MOG GOD",   color:"#ffd54a" };
-  if (s >= 8)   return { name:"CHADLITE",  color:"#a78bfa" };
+  if (s >= 8)   return { name:"CHADLITE",  color:"#a855f7" };
   if (s >= 6.5) return { name:"MTN",       color:"#60a5fa" };
   if (s >= 5)   return { name:"MID",       color:"#999" };
                 return { name:"UNRANKED",  color:"#666" };
@@ -143,7 +143,7 @@ function loop(ts) {
 
 function bar(val) {
   const pct = Math.round(val * 100);
-  const color = val > 0.65 ? "#a78bfa" : val > 0.4 ? "#ffd54a" : "#fca5a5";
+  const color = val > 0.65 ? "#a855f7" : val > 0.4 ? "#ffd54a" : "#fca5a5";
   return `<div class="bar-row">
     <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
     <span class="bar-pct">${pct}</span>
@@ -253,9 +253,9 @@ document.addEventListener("click", () => camDropdown.classList.add("hidden"));
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --green: #a78bfa;
+  --green: #a855f7;
   --gold: #ffd54a;
-  --purple: #a78bfa;
+  --purple: #a855f7;
   --red: #fca5a5;
   --bg: #09090b;
   --card: #111113;
@@ -320,7 +320,7 @@ header .dot {
   background: var(--card);
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(167, 139, 250, 0.25);
+  border: 1px solid rgba(168, 85, 247, 0.25);
 }
 video {
   display: none;
@@ -368,9 +368,9 @@ video {
   font-weight: 900;
   letter-spacing: 0.2em;
   font-family: inherit;
-  background: rgba(167, 139, 250, 0.15);
-  border: 1px solid rgba(167, 139, 250, 0.4);
-  color: #a78bfa;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #a855f7;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
@@ -419,7 +419,7 @@ video {
 .score-panel {
   background: var(--card);
   border-radius: 16px;
-  border: 1px solid rgba(167, 139, 250, 0.25);
+  border: 1px solid rgba(168, 85, 247, 0.25);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -442,7 +442,7 @@ video {
   font-weight: 900;
   letter-spacing: -0.04em;
   line-height: 1;
-  background: linear-gradient(180deg, #fff 30%, #c4b5fd);
+  background: linear-gradient(180deg, #fff 30%, #d8b4fe);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -465,7 +465,7 @@ video {
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 0.18em;
-  color: #c4b5fd;
+  color: #d8b4fe;
 }
 .flaw {
   font-size: 9px;
