@@ -182,6 +182,7 @@ init();
 // ── camera selector ──────────────────────────────────────────────────────────
 let currentDeviceId = null;
 let loopStarted = false;
+let shouldMirror = true;
 
 async function startCamera(deviceId) {
   if (video.srcObject) {
@@ -193,11 +194,31 @@ async function startCamera(deviceId) {
   const stream = await navigator.mediaDevices.getUserMedia(constraints);
   video.srcObject = stream;
   await video.play();
-  currentDeviceId = stream.getVideoTracks()[0]?.getSettings()?.deviceId;
+  const track = stream.getVideoTracks()[0];
+  currentDeviceId = track?.getSettings()?.deviceId;
+  const facingMode = track?.getSettings()?.facingMode;
+  shouldMirror = (facingMode === "user" || facingMode === undefined);
   document.getElementById("status-wrap").style.display = "none";
   if (!loopStarted) {
     loopStarted = true;
     requestAnimationFrame(loop);
+    const canvas = document.getElementById("mirror-canvas");
+    const ctx = canvas.getContext("2d");
+    function drawMirror() {
+      if (video.videoWidth) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.save();
+        if (shouldMirror) {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0);
+        ctx.restore();
+      }
+      requestAnimationFrame(drawMirror);
+    }
+    drawMirror();
   }
   renderCamOptions();
 }
@@ -302,9 +323,11 @@ header .dot {
   border: 1px solid var(--border);
 }
 video {
+  display: none;
+}
+#mirror-canvas {
   width: 100%; height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
   display: block;
 }
 #status-wrap {
@@ -539,6 +562,7 @@ footer {
   <!-- camera -->
   <div class="cam-wrap">
     <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="mirror-canvas"></canvas>
     <div id="status-wrap">
       <div class="spinner"></div>
       <div id="status">INITIALISING…</div>
@@ -559,10 +583,6 @@ footer {
     </div>
   </div>
 </div>
-
-
-
-
 
 </body>
 </html>
